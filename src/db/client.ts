@@ -3,6 +3,7 @@ import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { PGlite } from "@electric-sql/pglite";
 import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
 import postgres from "postgres";
+import { mkdirSync } from "node:fs";
 import * as schema from "./schema";
 
 export type Db =
@@ -21,7 +22,9 @@ export function createDb(): { db: Db; driver: "postgres" | "pglite" } {
     const client = postgres(url, { prepare: false });
     return { db: drizzlePostgres(client, { schema }), driver: "postgres" };
   }
-  const pglite = new PGlite(process.env.PGLITE_DIR ?? ".data/pglite", {
+  const dir = process.env.PGLITE_DIR ?? ".data/pglite";
+  mkdirSync(dir, { recursive: true }); // PGlite's own mkdir is not recursive
+  const pglite = new PGlite(dir, {
     extensions: { btree_gist },
   });
   return { db: drizzlePglite(pglite, { schema }), driver: "pglite" };
