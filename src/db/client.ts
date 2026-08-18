@@ -1,6 +1,7 @@
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { PGlite } from "@electric-sql/pglite";
+import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
 import postgres from "postgres";
 import * as schema from "./schema";
 
@@ -20,6 +21,8 @@ export function createDb(): { db: Db; driver: "postgres" | "pglite" } {
     const client = postgres(url, { prepare: false });
     return { db: drizzlePostgres(client, { schema }), driver: "postgres" };
   }
-  const pglite = new PGlite(process.env.PGLITE_DIR ?? ".data/pglite");
+  const pglite = new PGlite(process.env.PGLITE_DIR ?? ".data/pglite", {
+    extensions: { btree_gist },
+  });
   return { db: drizzlePglite(pglite, { schema }), driver: "pglite" };
 }

@@ -5,10 +5,15 @@ export default function LandingPage() {
   return (
     <main className="flex-1 flex flex-col">
       {/* Poster moment — brand energy lives here, not in the forms */}
-      <section className="surface-poster bg-bg text-ink flex flex-col items-center justify-center gap-6 px-6 py-20 text-center">
-        <p className="font-display text-brand text-3xl leading-none">
-          רנצ&apos;ו · תיקוני אופניים עד הבית
-        </p>
+      <section className="surface-poster bg-bg text-ink flex flex-col items-center justify-center gap-6 px-6 py-14 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset, exact rendering */}
+        <img
+          src="/logo-480.png"
+          alt="רנצ'ו — תיקוני אופניים עד הבית. אנחנו מתקנים, אתם רוכבים."
+          width={240}
+          height={240}
+          className="w-52 sm:w-60 h-auto"
+        />
         <h1 className="font-display text-6xl sm:text-7xl leading-none max-w-2xl">
           פנצ&apos;ר? תיקון? טיפול?
           <br />
