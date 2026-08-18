@@ -1,26 +1,110 @@
 @import "tailwindcss";
 
+/*
+ * Rancho RideCare — Design Tokens v1
+ * Source: the Rancho price-list artifact (black / hot fuchsia / white, street energy)
+ * per decision C1 (see docs/DECISIONS.md). Cream tint nods to the spec's "לבן קרמי"
+ * for secondary/soft surfaces.
+ *
+ * Two surface moods share one token set:
+ *  - Customer surfaces default to light ("paper") for maximum readability of
+ *    forms, prices and scheduling. Brand "poster moments" use .surface-poster.
+ *  - Rancho Pro uses .surface-pro (dark, high-contrast, sunlight-legible).
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Font families — self-hosted via Fontsource, imported in app/layout.tsx */
+  --font-ui: "Noto Sans Hebrew";
+  --font-display: "Karantina";
+
+  /* Brand palette */
+  --rancho-black: #0d0d0d;
+  --rancho-ink: #1a1a1a;
+  --rancho-pink: #ff2d87;
+  --rancho-pink-strong: #e0176e;
+  --rancho-pink-soft: #ffe3f0;
+  --rancho-white: #ffffff;
+  --rancho-cream: #faf6f2;
+  --rancho-gray: #6b6b6b;
+  --rancho-gray-soft: #e8e4e1;
+
+  /* Safety semantics (never overloaded with brand pink) */
+  --safety-ok: #1a9e55;
+  --safety-attention: #d97a00;
+  --safety-unsafe: #d32f2f;
+
+  /* Semantic surface tokens — light/customer default */
+  --color-bg: var(--rancho-cream);
+  --color-surface: var(--rancho-white);
+  --color-ink: var(--rancho-ink);
+  --color-ink-muted: var(--rancho-gray);
+  --color-border: var(--rancho-gray-soft);
+  --color-brand: var(--rancho-pink);
+  --color-brand-strong: var(--rancho-pink-strong);
+  --color-brand-soft: var(--rancho-pink-soft);
+  --color-on-brand: var(--rancho-white);
+
+  /* Shape & elevation */
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+  --shadow-card: 0 2px 12px rgb(13 13 13 / 0.08);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--rancho-pink) 45%, transparent);
+
+  /* Touch targets */
+  --tap-min: 3rem; /* 48px minimum */
+}
+
+/* Dark, high-contrast operator surface (Rancho Pro) */
+.surface-pro {
+  --color-bg: var(--rancho-black);
+  --color-surface: #171717;
+  --color-ink: #f5f5f5;
+  --color-ink-muted: #b0b0b0;
+  --color-border: #333333;
+  --color-brand-soft: #3d1226;
+  --shadow-card: 0 2px 12px rgb(0 0 0 / 0.5);
+}
+
+/* Brand "poster moment" surface (heroes, confirmations, empty states) */
+.surface-poster {
+  --color-bg: var(--rancho-black);
+  --color-surface: #171717;
+  --color-ink: var(--rancho-white);
+  --color-ink-muted: #cfcfcf;
+  --color-border: #333333;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-border: var(--color-border);
+  --color-brand: var(--color-brand);
+  --color-brand-strong: var(--color-brand-strong);
+  --color-brand-soft: var(--color-brand-soft);
+  --color-on-brand: var(--color-on-brand);
+  --color-safety-ok: var(--safety-ok);
+  --color-safety-attention: var(--safety-attention);
+  --color-safety-unsafe: var(--safety-unsafe);
+  --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
+  --font-sans: var(--font-ui);
+  --font-display: var(--font-display);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-ui), system-ui, sans-serif;
+}
+
+/* Display typography is opt-in, never the default for functional text */
+.font-display {
+  font-family: var(--font-display), var(--font-ui), sans-serif;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
