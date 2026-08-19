@@ -14,6 +14,8 @@
 
 Design directive D16 applied across the app (2026-08-19): white background only, no emojis.
 
+**Adversarial code review pass** (2026-08-19): 4-lens review (security / correctness / booking flow / pro flow) produced 29 findings; all criticals+majors fixed and regression-tested (see commit d021f38). Consciously deferred to P1: OTP phone-ownership verification (name+phone matching mitigates), orphan-media sweep, async scrypt with concurrency cap.
+
 ## Test inventory
 - 53 unit/integration tests (Vitest): state machines (exhaustive transition tables + guards), assessment fixtures, scheduling fixtures, migrations + exclusion constraint, seeds, sessions, job lifecycle (Scenarios A/C/visit-fee at DB level).
 - 7 E2E tests (Playwright, mobile viewport, production build): landing RTL smoke ×2, Scenario A+C, B, D, E, token guards.
