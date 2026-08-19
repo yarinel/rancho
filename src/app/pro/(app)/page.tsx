@@ -82,7 +82,12 @@ export default async function ProTodayPage() {
 
   return (
     <div className="p-4 flex flex-col gap-3">
-      <h1 className="text-xl font-bold">היום · {ordered.length} עבודות</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">היום · {ordered.length} עבודות</h1>
+        <Link href="/pro/loadout" className="text-sm underline text-ink-muted">
+          מה להעמיס?
+        </Link>
+      </div>
       {ordered.length === 0 && (
         <Card><p className="text-ink-muted">אין עבודות מתוכננות להיום.</p></Card>
       )}

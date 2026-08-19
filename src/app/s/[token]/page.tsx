@@ -13,6 +13,8 @@ import {
 import { fmtDate, fmtTime, shekel } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { ApprovalPrompt } from "@/components/status/approval-prompt";
+import { WhileHerePrompt } from "@/components/status/while-here";
+import { categoryHe } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +76,7 @@ export default async function StatusPage({
     }
   }
 
-  const [appointmentRows, approvals, findings, lineItems, safetyRows, customer, bike] =
+  const [appointmentRows, approvals, findings, lineItems, safetyRows, customer, bike, householdBikes, whileHereRequests] =
     await Promise.all([
       d.select().from(schema.appointments).where(eq(schema.appointments.jobId, job.id)),
       d.select().from(schema.approvalRecords).where(eq(schema.approvalRecords.jobId, job.id)),
@@ -83,6 +85,11 @@ export default async function StatusPage({
       d.select().from(schema.safetyChecks).where(eq(schema.safetyChecks.jobId, job.id)),
       d.select().from(schema.customers).where(eq(schema.customers.id, job.customerId)),
       d.select().from(schema.bicycles).where(eq(schema.bicycles.id, job.bicycleId)),
+      d.select().from(schema.bicycles).where(eq(schema.bicycles.householdId, job.householdId)),
+      d
+        .select()
+        .from(schema.serviceRequests)
+        .where(eq(schema.serviceRequests.statusReason, "WHILE_YOU_ARE_HERE")),
     ]);
   const appointment = appointmentRows.find((a) => a.status === "ACTIVE");
   const view = jobStatusView(job.status);
@@ -135,7 +142,30 @@ export default async function StatusPage({
           {job.priceNoteHe && (
             <p className="text-xs text-ink-muted">{job.priceNoteHe}</p>
           )}
+          {job.status === "SCHEDULED" && (
+            <Link
+              href={`/book/slots?job=${job.publicToken}`}
+              className="underline text-sm self-start"
+            >
+              שינוי מועד
+            </Link>
+          )}
         </Card>
+      )}
+
+      {job.status === "SCHEDULED" && (
+        <WhileHerePrompt
+          jobToken={job.publicToken}
+          bikes={householdBikes
+            .filter((b) => b.id !== job.bicycleId)
+            .map((b) => ({
+              id: b.id,
+              labelHe: b.nickname ?? categoryHe(b.category),
+              requested: whileHereRequests.some(
+                (r) => r.bicycleId === b.id && r.status === "NEEDS_REVIEW",
+              ),
+            }))}
+        />
       )}
 
       {pendingApprovals.length > 0 && job.status === "AWAITING_APPROVAL" && (

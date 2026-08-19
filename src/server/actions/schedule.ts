@@ -261,3 +261,136 @@ function slotView(s: {
     dateKey: s.dateKey,
   };
 }
+
+/* --------------------------- self-service reschedule ------------------------ */
+
+async function jobForScheduling(
+  d: Awaited<ReturnType<typeof db>>,
+  jobToken: string,
+) {
+  const jobs = await d
+    .select()
+    .from(schema.serviceJobs)
+    .where(eq(schema.serviceJobs.publicToken, jobToken));
+  const job = jobs[0];
+  if (!job || job.status !== "SCHEDULED") return null;
+  const [locs, appts] = await Promise.all([
+    d.select().from(schema.locations).where(eq(schema.locations.id, job.locationId)),
+    d
+      .select()
+      .from(schema.appointments)
+      .where(
+        and(
+          eq(schema.appointments.jobId, job.id),
+          eq(schema.appointments.status, "ACTIVE"),
+        ),
+      ),
+  ]);
+  const loc = locs[0];
+  const current = appts[0];
+  if (!loc?.zoneId || !loc.lat || !loc.lng || !current) return null;
+  const blockDurationMin = Math.round(
+    (current.blockEnd.getTime() - current.blockStart.getTime()) / 60000,
+  );
+  return {
+    job,
+    current,
+    schedReq: {
+      id: job.id,
+      zoneId: loc.zoneId,
+      lat: Number(loc.lat),
+      lng: Number(loc.lng),
+      blockDurationMin,
+      urgency: "NORMAL" as const,
+      timePreference: "NONE" as const,
+    },
+  };
+}
+
+/** Eligible slots for moving an existing SCHEDULED job (customer-facing). */
+export async function getSlotsForJobToken(jobToken: string) {
+  const d = await db();
+  const found = await jobForScheduling(d, jobToken);
+  if (!found) return null;
+  const res = await computeSlots(d, found.schedReq);
+  return {
+    display: res.display.map(slotView),
+    all: res.slots.slice(0, 60).map(slotView),
+  };
+}
+
+/**
+ * Customer moves their own visit: Stage-1 revalidation + conditional supersede
+ * inside one transaction; the old window is kept as history (SUPERSEDED).
+ */
+export async function rescheduleSlotAction(
+  jobToken: string,
+  plannedStartISO: string,
+): Promise<BookResult> {
+  const h = await headers();
+  const ip = clientKeyFromHeaders(h);
+  if (!rateLimit(`reschedule:${ip}`, 10, 10 * 60 * 1000)) {
+    return { ok: false, error: "יותר מדי נסיונות — רגע הפסקה" };
+  }
+  const d = await db();
+  const found = await jobForScheduling(d, jobToken);
+  if (!found) return { ok: false, error: "אי אפשר לשנות מועד לביקור הזה" };
+  const { job, current, schedReq } = found;
+
+  const plannedStart = new Date(plannedStartISO);
+  if (Number.isNaN(plannedStart.getTime())) {
+    return { ok: false, error: "מועד לא תקין" };
+  }
+  if (!(await isSlotStillEligible(d, schedReq, plannedStart))) {
+    return { ok: false, stale: true };
+  }
+
+  const config = await loadSchedulingConfig(d);
+  try {
+    await d.transaction(async (tx) => {
+      const superseded = await tx
+        .update(schema.appointments)
+        .set({ status: "SUPERSEDED" })
+        .where(
+          and(
+            eq(schema.appointments.id, current.id),
+            eq(schema.appointments.status, "ACTIVE"),
+          ),
+        )
+        .returning();
+      if (superseded.length === 0) throw new Error("NO_ACTIVE_APPOINTMENT");
+      await tx.insert(schema.appointments).values({
+        jobId: job.id,
+        technicianId: current.technicianId,
+        windowStart: plannedStart,
+        windowEnd: new Date(
+          plannedStart.getTime() + config.windowMinutes * 60 * 1000,
+        ),
+        blockStart: plannedStart,
+        blockEnd: new Date(
+          plannedStart.getTime() + schedReq.blockDurationMin * 60 * 1000,
+        ),
+        plannedStart,
+      });
+    });
+  } catch (e) {
+    const msg = `${String(e)} ${String((e as Error).cause ?? "")}`;
+    if (/NO_ACTIVE_APPOINTMENT/.test(msg)) {
+      return { ok: false, error: "המועד כבר שונה — רעננו את העמוד" };
+    }
+    if (/appointments_no_overlap|exclusion|conflict/i.test(msg)) {
+      return { ok: false, stale: true };
+    }
+    console.error("rescheduleSlotAction failed", e);
+    return { ok: false, error: "משהו השתבש, נסו שוב" };
+  }
+  await logEvent(
+    d,
+    "service_job",
+    job.id,
+    "rescheduled",
+    `customer:${jobToken.slice(0, 6)}`,
+    { from: current.plannedStart.toISOString(), to: plannedStartISO },
+  );
+  return { ok: true, jobToken };
+}

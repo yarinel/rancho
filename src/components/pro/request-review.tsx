@@ -71,6 +71,7 @@ export function RequestReviewCard({
         <span className="text-xs bg-brand-soft text-brand-strong font-medium px-2 py-1 rounded-full whitespace-nowrap">
           {statusHe[request.status] ?? request.status}
           {request.statusReason === "NO_SLOT" && " · לא נמצא זמן"}
+          {request.statusReason === "WHILE_YOU_ARE_HERE" && " · באותו ביקור"}
         </span>
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-muted">

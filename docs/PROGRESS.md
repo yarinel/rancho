@@ -16,14 +16,16 @@ Design directive D16 applied across the app (2026-08-19): white background only,
 
 **Adversarial code review pass** (2026-08-19): 4-lens review (security / correctness / booking flow / pro flow) produced 29 findings; all criticals+majors fixed and regression-tested (see commit d021f38). Consciously deferred to P1: OTP phone-ownership verification (name+phone matching mitigates), orphan-media sweep, async scrypt with concurrency cap.
 
+**P1 batch 1** (2026-08-19): PWA manifest + installable icons from the brand logo; Lighthouse mobile audits run and passing M12 thresholds — landing 89/100 (perf/a11y), booking 98/100, pro-login 99/100 (contrast fixed: dark-on-pink CTAs per the logo language); customer self-service reschedule from the status page (Stage-1 revalidation + conditional supersede); Daily Loadout screen (/pro/loadout — expected work aggregated by wheel size for today+tomorrow); while-you-are-here prompt on scheduled visits → flagged request in the operator inbox. E2E suite extended to 8 tests.
+
 ## Test inventory
 - 53 unit/integration tests (Vitest): state machines (exhaustive transition tables + guards), assessment fixtures, scheduling fixtures, migrations + exclusion constraint, seeds, sessions, job lifecycle (Scenarios A/C/visit-fee at DB level).
-- 7 E2E tests (Playwright, mobile viewport, production build): landing RTL smoke ×2, Scenario A+C, B, D, E, token guards.
+- 8 E2E tests (Playwright, mobile viewport, production build): landing RTL smoke ×2, Scenario A+C, B, D, E, token guards, P1 reschedule+while-here.
 
 ## Current blockers / remaining before production launch
 - **Credentials from Rancho** (docs/ROADMAP.md N): Supabase project + `DATABASE_URL`/keys, Vercel project, `AUTH_SECRET`, real staff password (`SEED_STAFF_EMAIL`/`SEED_STAFF_PASSWORD`), Google Maps API key (until then: dev geocode fallback), `NEXT_PUBLIC_RANCHO_PHONE`.
 - **Price TBDs** (DECISIONS D1–D5): tire pricing semantics, small-wheel prices, cable/pedal part inclusion, final visit fee, per-zone travel charges.
-- **Manual audits not yet run**: Lighthouse perf/accessibility thresholds (M12 acceptance), real-device iOS PWA camera check. Structure is in place; run before launch.
+- **Manual audits**: Lighthouse done (see P1 batch 1). Still pending: real-device iOS PWA camera check.
 - P1 backlog per docs/ROADMAP.md (OTP/My-Bikes, WhatsApp API, routing provider, payments, inventory, waitlist…).
 
 ## Next task

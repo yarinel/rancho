@@ -231,3 +231,58 @@ test("guards: status page hides internals and unknown tokens 404", async ({ page
     expect(body).not.toContain(internal);
   }
 });
+
+test("P1: self-service reschedule + while-you-are-here", async ({ page }) => {
+  test.setTimeout(120_000);
+
+  // returning customer (Dana) books a SECOND bike — BMX 24"
+  await page.goto("/book");
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/book");
+  await page.getByRole("button", { name: "יש פנצ'ר / הגלגל ריק" }).click();
+  await page.getByRole("button", { name: "BMX", exact: true }).click();
+  await page.getByRole("button", { name: '24"', exact: true }).click();
+  await page.getByRole("button", { name: "המשך" }).click();
+  for (const answer of ["קדמי", "מיד", "לא"]) {
+    await page.getByRole("button", { name: answer, exact: true }).click();
+  }
+  await page.getByRole("button", { name: "המשך" }).click();
+  await page.getByRole("button", { name: /אפשר גם בלי/ }).click();
+  await page.getByLabel("כתובת מלאה").fill("רחוב הרצל 5, באר שבע");
+  await page.getByRole("button", { name: "המשך" }).click();
+  await fillContact(page, "דנה לוי", "0521111111");
+  await page.getByRole("link", { name: /בחרו זמן/ }).click();
+  await page.locator("button[dir=ltr]").first().click();
+  await page.waitForURL(/\/s\/[a-f0-9]+/);
+  const secondJobToken = page.url().match(/\/s\/([a-f0-9]+)/)![1];
+
+  // while-you-are-here: the household's OTHER bike is offered on the status page
+  await expect(page.getByText("אנחנו כבר מגיעים אליכם")).toBeVisible();
+  await page.getByRole("button", { name: /גם על/ }).first().click();
+  await expect(page.getByText(/סגור, נציץ/)).toBeVisible();
+
+  // self-service reschedule: pick a different slot, status reflects it
+  const before = await page
+    .locator("main")
+    .getByText(/·\s*\d{2}:\d{2}/)
+    .first()
+    .textContent();
+  await page.getByRole("link", { name: "שינוי מועד" }).click();
+  await expect(
+    page.getByRole("heading", { name: "לאיזה זמן נעביר את הביקור?" }),
+  ).toBeVisible();
+  await page.locator("button[dir=ltr]").nth(1).click();
+  await page.waitForURL(new RegExp(`/s/${secondJobToken}`));
+  await expect(page.getByRole("heading", { name: "נקבע" })).toBeVisible();
+  const after = await page
+    .locator("main")
+    .getByText(/·\s*\d{2}:\d{2}/)
+    .first()
+    .textContent();
+  expect(after).not.toBe(before);
+
+  // the while-here request waits in the operator inbox, flagged
+  await proLogin(page);
+  await page.goto("/pro/requests");
+  await expect(page.getByText("באותו ביקור").first()).toBeVisible();
+});

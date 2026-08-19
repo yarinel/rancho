@@ -36,7 +36,8 @@
   --color-brand: var(--rancho-pink);
   --color-brand-strong: var(--rancho-pink-strong);
   --color-brand-soft: var(--rancho-pink-soft);
-  --color-on-brand: var(--rancho-white);
+  /* dark-on-pink like the logo — white-on-pink fails WCAG AA (~3:1 vs 7:1) */
+  --color-on-brand: var(--rancho-ink);
 
   /* Shape & elevation */
   --radius-card: 1rem;

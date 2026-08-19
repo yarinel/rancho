@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { bookSlotAction, noSlotFallbackAction } from "@/server/actions/schedule";
+import {
+  bookSlotAction,
+  noSlotFallbackAction,
+  rescheduleSlotAction,
+} from "@/server/actions/schedule";
 import { Card } from "@/components/ui/card";
 
 export interface SlotView {
@@ -43,10 +47,12 @@ export function SlotPicker({
   requestToken,
   display,
   all,
+  mode = "book",
 }: {
-  requestToken: string;
+  requestToken: string; // request token (book) or job token (reschedule)
   display: SlotView[];
   all: SlotView[];
+  mode?: "book" | "reschedule";
 }) {
   const router = useRouter();
   const [showAll, setShowAll] = useState(false);
@@ -57,15 +63,23 @@ export function SlotPicker({
   async function choose(slot: SlotView) {
     setBusy(slot.plannedStartISO);
     setError(null);
-    const res = await bookSlotAction(requestToken, slot.plannedStartISO);
-    setBusy(null);
-    if (res.ok && res.jobToken) {
-      router.push(`/s/${res.jobToken}?new=1`);
-    } else if (res.stale) {
-      setStale(true);
-      router.refresh(); // fresh alternatives
-    } else {
-      setError(res.error ?? "משהו השתבש");
+    try {
+      const res =
+        mode === "reschedule"
+          ? await rescheduleSlotAction(requestToken, slot.plannedStartISO)
+          : await bookSlotAction(requestToken, slot.plannedStartISO);
+      if (res.ok && res.jobToken) {
+        router.push(`/s/${res.jobToken}${mode === "book" ? "?new=1" : ""}`);
+      } else if (res.stale) {
+        setStale(true);
+        router.refresh(); // fresh alternatives
+      } else {
+        setError(res.error ?? "משהו השתבש");
+      }
+    } catch {
+      setError("בעיית תקשורת — נסו שוב");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -76,12 +90,25 @@ export function SlotPicker({
   }
 
   if (all.length === 0) {
+    if (mode === "reschedule") {
+      return (
+        <Card className="flex flex-col gap-3 items-center text-center py-8">
+          <h1 className="text-xl font-bold">אין חלון פנוי אחר כרגע</h1>
+          <p className="text-ink-muted">דברו איתנו ונמצא פתרון יחד.</p>
+          <Link href={`/s/${requestToken}`} className="underline text-sm">
+            חזרה לעמוד הסטטוס
+          </Link>
+        </Card>
+      );
+    }
     return <NoSlots requestToken={requestToken} />;
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">מתי נוח לכם שנגיע?</h1>
+      <h1 className="text-2xl font-bold">
+        {mode === "reschedule" ? "לאיזה זמן נעביר את הביקור?" : "מתי נוח לכם שנגיע?"}
+      </h1>
       {stale && (
         <p role="alert" className="text-safety-attention text-sm">
           הזמן שבחרתם בדיוק נתפס — הנה החלופות הקרובות ביותר.
