@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  settleApprovalAction,
   addFindingAction,
   attachJobMediaAction,
   leftSiteAction,
@@ -53,9 +54,14 @@ export function JobRunner(props: {
   async function go(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setBusy(true);
     setError(null);
-    const res = await fn();
-    setBusy(false);
-    if (!res.ok) setError(res.error ?? "שגיאה");
+    try {
+      const res = await fn();
+      if (!res.ok) setError(res.error ?? "שגיאה");
+    } catch {
+      setError("בעיית תקשורת — נסו שוב");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const status: string = job.status;
@@ -179,7 +185,7 @@ export function JobRunner(props: {
       {status === "IN_SERVICE" && (
         <>
           <ActualWorkStage {...props} busy={busy} go={go} />
-          <FindingsStage {...props} busy={busy} go={go} compact />
+          <FindingsStage {...props} busy={busy} go={go} />
           <Stage title="סיום עבודה">
             <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "FINAL_SAFETY_CHECK"))}>
               לבדיקת סיום
@@ -197,6 +203,7 @@ export function JobRunner(props: {
             busy={busy}
             onSave={(items) => go(() => saveSafetyCheckAction(job.id, { phase: "FINAL", items: items as never }))}
           />
+          <FindingsStage {...props} busy={busy} go={go} compact />
           <PhotoAttach jobId={job.id} kind="AFTER" label="תמונת אחרי" onDone={() => go(async () => ({ ok: true }))} />
           <Stage title="המשך">
             <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "PAYMENT_PENDING"))}>
@@ -233,7 +240,7 @@ export function JobRunner(props: {
       )}
 
       {/* exceptional endings, always reachable mid-visit */}
-      {["ARRIVED", "INSPECTION", "AWAITING_APPROVAL", "IN_SERVICE"].includes(status) && (
+      {["ARRIVED", "INSPECTION", "AWAITING_APPROVAL", "IN_SERVICE", "FINAL_SAFETY_CHECK", "PAYMENT_PENDING"].includes(status) && (
         <ExceptionalEnd jobId={job.id} busy={busy} go={go} />
       )}
       {["SCHEDULED", "EN_ROUTE"].includes(status) && (
@@ -438,7 +445,12 @@ function FindingsStage({
             />
           )}
           {f.resolution === "OPEN" && f.proposedWorkHe && pendingByFinding.has(f.id) && (
-            <p className="text-xs text-safety-attention">ממתין להחלטת לקוח בקישור הסטטוס…</p>
+            <VerbalSettle
+              jobId={job.id}
+              approvalId={(pendingByFinding.get(f.id) as any).id}
+              busy={busy}
+              go={go}
+            />
           )}
           {f.resolution === "OPEN" && approvedByFinding.has(f.id) && (
             <button
@@ -450,15 +462,26 @@ function FindingsStage({
             </button>
           )}
           {f.severity === "UNSAFE" && f.resolution === "OPEN" && (
-            <button
-              disabled={busy}
-              onClick={() =>
-                go(() => resolveFindingAction(job.id, { findingId: f.id, resolution: "ACKNOWLEDGED_UNREPAIRED" }))
-              }
-              className="min-h-11 rounded-(--radius-control) border border-safety-attention text-safety-attention text-xs font-medium self-start px-3"
-            >
-              הלקוח מודע ובחר לא לתקן (יתועד)
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                disabled={busy}
+                onClick={() =>
+                  go(() => resolveFindingAction(job.id, { findingId: f.id, resolution: "REPAIRED" }))
+                }
+                className="min-h-11 rounded-(--radius-control) border border-safety-ok text-safety-ok text-xs font-medium px-3"
+              >
+                טופל במקום
+              </button>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  go(() => resolveFindingAction(job.id, { findingId: f.id, resolution: "ACKNOWLEDGED_UNREPAIRED" }))
+                }
+                className="min-h-11 rounded-(--radius-control) border border-safety-attention text-safety-attention text-xs font-medium px-3"
+              >
+                הלקוח מודע ובחר לא לתקן (יתועד)
+              </button>
+            </div>
           )}
         </div>
       ))}
@@ -636,6 +659,47 @@ function ProposeWork({ finding, jobId, catalog, busy, go, approverName, setAppro
   );
 }
 
+function VerbalSettle({ jobId, approvalId, busy, go }: any) {
+  const [name, setName] = useState("");
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-2">
+      <p className="text-xs text-safety-attention">
+        נשלח לאישור בקישור — אם הלקוח ענה בעל-פה, תעדו כאן:
+      </p>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="שם המאשר/ת"
+        className="min-h-10 rounded-(--radius-control) border border-border bg-bg px-3 text-sm"
+      />
+      <div className="flex gap-2">
+        <button
+          disabled={busy || name.trim().length < 2}
+          onClick={() =>
+            go(() =>
+              settleApprovalAction(jobId, { approvalId, decision: "APPROVED", approverName: name }),
+            )
+          }
+          className="min-h-10 px-3 rounded-(--radius-control) bg-brand text-on-brand text-xs font-medium disabled:opacity-40"
+        >
+          אישר בעל-פה
+        </button>
+        <button
+          disabled={busy || name.trim().length < 2}
+          onClick={() =>
+            go(() =>
+              settleApprovalAction(jobId, { approvalId, decision: "DECLINED", approverName: name }),
+            )
+          }
+          className="min-h-10 px-3 rounded-(--radius-control) border border-border text-xs font-medium disabled:opacity-40"
+        >
+          דחה בעל-פה
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ActualWorkStage({ job, lineItems, approvals, busy, go }: any) {
   const expected = lineItems.filter((li: any) => li.kind === "EXPECTED");
   const actual = lineItems.filter((li: any) => li.kind === "ACTUAL");
@@ -692,12 +756,14 @@ function ActualWorkStage({ job, lineItems, approvals, busy, go }: any) {
   );
 }
 
-function PaymentStage({ job, approvedTotal, busy, go, findings }: any) {
+function PaymentStage({ job, approvedTotal, busy, go, findings, lineItems }: any) {
+  // must mirror the domain isVisitFeePath: proposals all declined AND no actual work
   const declinedAll =
     findings.filter((f: any) => f.proposedWorkHe).length > 0 &&
     findings
       .filter((f: any) => f.proposedWorkHe)
-      .every((f: any) => ["DECLINED", "DEFERRED"].includes(f.resolution));
+      .every((f: any) => ["DECLINED", "DEFERRED", "ACKNOWLEDGED_UNREPAIRED"].includes(f.resolution)) &&
+    lineItems.filter((li: any) => li.kind === "ACTUAL").length === 0;
   const suggested = declinedAll ? job.visitFee + (job.travelCharge ?? 0) : approvedTotal;
 
   const [amount, setAmount] = useState(String(suggested / 100));

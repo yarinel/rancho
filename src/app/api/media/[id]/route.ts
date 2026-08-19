@@ -3,13 +3,13 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import * as schema from "@/db/schema";
 import { readMedia } from "@/server/storage";
-import { rateLimit } from "@/server/rate-limit";
+import { clientKeyFromHeaders, rateLimit } from "@/server/rate-limit";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const ip = req.headers.get("x-forwarded-for") ?? "local";
+  const ip = clientKeyFromHeaders(req.headers);
   if (!rateLimit(`media:${ip}`, 300, 10 * 60 * 1000)) {
     return new NextResponse(null, { status: 429 });
   }

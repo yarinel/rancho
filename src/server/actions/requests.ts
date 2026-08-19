@@ -19,7 +19,10 @@ const reviewSchema = z.object({
   priceHighShekels: z.coerce.number().min(0).max(10000).optional(),
   durationMin: z.coerce.number().int().min(10).max(240),
   reviewNotes: z.string().max(500).optional(),
-});
+}).refine(
+  (v) => v.priceHighShekels == null || v.priceHighShekels >= v.priceLowShekels,
+  { message: "'עד' חייב להיות גבוה מהמחיר ההתחלתי" },
+);
 
 /** Operator prices an ambiguous request → READY_TO_BOOK (customer books via link). */
 export async function reviewRequestAction(

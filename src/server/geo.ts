@@ -34,12 +34,22 @@ export async function resolveZone(d: Db, address: string): Promise<GeoResult> {
     throw new Error("GoogleGeoProvider not implemented yet — unset GOOGLE_MAPS_API_KEY");
   }
   const zones = await d.select().from(schema.serviceZones);
-  const normalized = address.replace(/[-־]/g, " ").toLowerCase();
+  const normalized = address.replace(/[-־]/g, " ").toLowerCase().trim();
+  // the city is expected as its own trailing/comma-delimited segment —
+  // a street merely CONTAINING a city name (רחוב עומר...) must not match
+  const cityMatches = (c: string) => {
+    const city = c.toLowerCase();
+    return (
+      normalized === city ||
+      normalized.endsWith(` ${city}`) ||
+      normalized.endsWith(`,${city}`) ||
+      normalized.includes(`, ${city}`) ||
+      normalized.includes(`,${city},`)
+    );
+  };
   for (const zone of zones) {
     if (!zone.active) continue;
-    const match = (zone.cityMatch ?? []).some((c) =>
-      normalized.includes(c.toLowerCase()),
-    );
+    const match = (zone.cityMatch ?? []).some(cityMatches);
     if (match) {
       const centroid = DEV_CENTROIDS[zone.nameHe] ?? null;
       return {

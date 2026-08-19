@@ -1,7 +1,7 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import * as schema from "@/db/schema";
 import {
@@ -13,7 +13,7 @@ import { emptyJobContext, requestForScheduling } from "@/server/job-helpers";
 import { canTransitionRequest } from "@/domain/request-machine";
 import { canTransitionJob } from "@/domain/job-machine";
 import { logEvent } from "@/server/log";
-import { rateLimit } from "@/server/rate-limit";
+import { clientKeyFromHeaders, rateLimit } from "@/server/rate-limit";
 import { headers } from "next/headers";
 
 const token = () => randomBytes(16).toString("hex");
@@ -37,7 +37,7 @@ export async function bookSlotAction(
   plannedStartISO: string,
 ): Promise<BookResult> {
   const h = await headers();
-  const ip = h.get("x-forwarded-for") ?? "local";
+  const ip = clientKeyFromHeaders(h);
   if (!rateLimit(`book:${ip}`, 10, 10 * 60 * 1000)) {
     return { ok: false, error: "יותר מדי נסיונות — רגע הפסקה" };
   }
@@ -162,10 +162,21 @@ export async function bookSlotAction(
         actor: "customer",
       });
       if (!reqGuard.ok) throw new Error(reqGuard.error);
-      await tx
+      // conditional conversion: a double-submit loses here and rolls back —
+      // one request can never yield two jobs
+      const converted = await tx
         .update(schema.serviceRequests)
         .set({ status: "CONVERTED_TO_JOB", updatedAt: new Date() })
-        .where(eq(schema.serviceRequests.id, request.id));
+        .where(
+          and(
+            eq(schema.serviceRequests.id, request.id),
+            eq(schema.serviceRequests.status, "READY_TO_BOOK"),
+          ),
+        )
+        .returning();
+      if (converted.length === 0) {
+        throw new Error("ALREADY_CONVERTED");
+      }
 
       return job;
     });
@@ -176,6 +187,9 @@ export async function bookSlotAction(
     return { ok: true, jobToken };
   } catch (e) {
     const msg = `${String(e)} ${String((e as Error).cause ?? "")}`;
+    if (/ALREADY_CONVERTED/.test(msg)) {
+      return { ok: false, error: "הבקשה כבר תואמה" };
+    }
     if (/appointments_no_overlap|exclusion|conflict/i.test(msg)) {
       return { ok: false, stale: true }; // lost the race — honest alternatives
     }

@@ -124,7 +124,13 @@ export function BookingWizard() {
   useEffect(() => {
     if (!loaded.current) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      // terminal screens are never persisted — a wrong address or a mis-tap on
+      // the e-bike chip must not trap the browser in a dead-end on next visit
+      if (["out_of_scope", "out_of_zone", "result"].includes(state.step)) {
+        localStorage.removeItem(STORAGE_KEY);
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
     } catch {
       /* storage full/blocked — flow still works server-side */
     }
@@ -234,18 +240,23 @@ export function BookingWizard() {
               }
               setBusy(true);
               setError(null);
-              const res = await createDraftAction({
-                symptom: state.symptom!,
-                bikeCategory: state.bikeCategory!,
-                wheelSize: state.wheelSize!,
-                brand: state.brand || undefined,
-                riderName: state.riderName || undefined,
-              });
-              setBusy(false);
-              if (res.outOfScope) update({ step: "out_of_scope" });
-              else if (res.ok && res.requestToken) {
-                update({ requestToken: res.requestToken, step: "intake" });
-              } else setError(res.error ?? "משהו השתבש, נסו שוב");
+              try {
+                const res = await createDraftAction({
+                  symptom: state.symptom!,
+                  bikeCategory: state.bikeCategory!,
+                  wheelSize: state.wheelSize!,
+                  brand: state.brand || undefined,
+                  riderName: state.riderName || undefined,
+                });
+                if (res.outOfScope) update({ step: "out_of_scope" });
+                else if (res.ok && res.requestToken) {
+                  update({ requestToken: res.requestToken, step: "intake" });
+                } else setError(res.error ?? "משהו השתבש, נסו שוב");
+              } catch {
+                setError("בעיית תקשורת — נסו שוב");
+              } finally {
+                setBusy(false);
+              }
             }}
           >
             המשך
@@ -263,9 +274,18 @@ export function BookingWizard() {
             setBusy(true);
             setError(null);
             update({ answers });
-            await saveAnswersAction(state.requestToken!, answers);
-            setBusy(false);
-            update({ step: "photos" });
+            try {
+              const res = await saveAnswersAction(state.requestToken!, answers);
+              if (!res.ok) {
+                setError("התשובות לא נשמרו — נסו שוב");
+                return;
+              }
+              update({ step: "photos" });
+            } catch {
+              setError("בעיית תקשורת — נסו שוב");
+            } finally {
+              setBusy(false);
+            }
           }}
         />
       )}
@@ -304,18 +324,23 @@ export function BookingWizard() {
             onClick={async () => {
               setBusy(true);
               setError(null);
-              const res = await saveLocationAction({
-                requestToken: state.requestToken!,
-                address: state.address!,
-                accessNotes: state.accessNotes,
-              });
-              setBusy(false);
-              if (!res.ok) {
-                setError(res.error ?? "משהו השתבש");
-              } else if (!res.inZone) {
-                update({ step: "out_of_zone" });
-              } else {
-                update({ zoneNameHe: res.zoneNameHe, step: "contact" });
+              try {
+                const res = await saveLocationAction({
+                  requestToken: state.requestToken!,
+                  address: state.address!,
+                  accessNotes: state.accessNotes,
+                });
+                if (!res.ok) {
+                  setError(res.error ?? "משהו השתבש");
+                } else if (!res.inZone) {
+                  update({ step: "out_of_zone" });
+                } else {
+                  update({ zoneNameHe: res.zoneNameHe, step: "contact" });
+                }
+              } catch {
+                setError("בעיית תקשורת — נסו שוב");
+              } finally {
+                setBusy(false);
               }
             }}
           >
@@ -331,16 +356,21 @@ export function BookingWizard() {
           onSubmit={async (name, phone) => {
             setBusy(true);
             setError(null);
-            const res = await submitContactAction({
-              requestToken: state.requestToken!,
-              name,
-              phone,
-              timePreference: "NONE",
-              photosProvided: state.photoUrls.length > 0,
-            });
-            setBusy(false);
-            if (!res.ok) setError(res.error ?? "משהו השתבש, נסו שוב");
-            else update({ result: res, step: "result" });
+            try {
+              const res = await submitContactAction({
+                requestToken: state.requestToken!,
+                name,
+                phone,
+                timePreference: "NONE",
+                photosProvided: state.photoUrls.length > 0,
+              });
+              if (!res.ok) setError(res.error ?? "משהו השתבש, נסו שוב");
+              else update({ result: res, step: "result" });
+            } catch {
+              setError("בעיית תקשורת — נסו שוב");
+            } finally {
+              setBusy(false);
+            }
           }}
         />
       )}
@@ -646,6 +676,14 @@ function ResultStep({
           רן עובר על הפרטים והתמונות וחוזר אליכם עם מחיר וזמן — בדרך כלל תוך כמה
           שעות. העדכון יגיע בהודעה לטלפון שהשארתם.
         </p>
+        <Link
+          href={`/s/${result.requestToken}`}
+          className="min-h-12 rounded-(--radius-control) bg-brand text-on-brand font-medium flex items-center justify-center px-6"
+          onClick={onRestart}
+        >
+          מעקב אחרי הבקשה
+        </Link>
+        <p className="text-xs text-ink-muted">שמרו את הקישור — כל העדכונים שם.</p>
         <Link href="/" className="underline text-sm" onClick={onRestart}>
           חזרה לדף הבית
         </Link>
@@ -736,6 +774,17 @@ function LeadCapture({
           </button>
         </div>
       )}
+      <button
+        className="underline text-sm min-h-10"
+        onClick={() => {
+          try {
+            localStorage.removeItem("rancho_booking_draft_v1");
+          } catch {}
+          window.location.reload();
+        }}
+      >
+        התחלה מחדש
+      </button>
       <Link href="/" className="underline text-sm">
         חזרה לדף הבית
       </Link>

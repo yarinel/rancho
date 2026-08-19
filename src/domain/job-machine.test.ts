@@ -59,6 +59,7 @@ describe("job machine — transition table", () => {
       "AWAITING_APPROVAL→PAYMENT_PENDING",
       "IN_SERVICE→FINAL_SAFETY_CHECK",
       "FINAL_SAFETY_CHECK→PAYMENT_PENDING",
+      "FINAL_SAFETY_CHECK→IN_SERVICE",
       "PAYMENT_PENDING→COMPLETED",
       "DRAFT→CANCELLED",
       "SCHEDULED→CANCELLED",
@@ -67,6 +68,8 @@ describe("job machine — transition table", () => {
       "INSPECTION→UNRESOLVED",
       "AWAITING_APPROVAL→UNRESOLVED",
       "IN_SERVICE→UNRESOLVED",
+      "FINAL_SAFETY_CHECK→UNRESOLVED",
+      "PAYMENT_PENDING→UNRESOLVED",
     ].map((s) => s),
   );
 
@@ -248,6 +251,48 @@ describe("job machine — guards", () => {
         ctx: noCheck,
       }).ok,
     ).toBe(false);
+
+    // an UNSAFE finding can never be quietly declined away on the visit-fee
+    // path — it must be repaired or explicitly customer-acknowledged
+    const unsafeDeclined = {
+      ...declinedAll,
+      findings: [
+        {
+          id: "f-unsafe",
+          severity: "UNSAFE" as const,
+          resolution: "DECLINED" as const,
+          proposedPrice: ILS(80),
+          hasProposal: true,
+        },
+      ],
+    };
+    expect(
+      canTransitionJob({
+        from: "AWAITING_APPROVAL",
+        to: "PAYMENT_PENDING",
+        actor: "staff",
+        ctx: unsafeDeclined,
+      }).ok,
+    ).toBe(false);
+    const unsafeAcknowledged = {
+      ...unsafeDeclined,
+      findings: [
+        {
+          ...unsafeDeclined.findings[0],
+          resolution: "ACKNOWLEDGED_UNREPAIRED" as const,
+        },
+      ],
+    };
+    const ackRes = canTransitionJob({
+      from: "AWAITING_APPROVAL",
+      to: "PAYMENT_PENDING",
+      actor: "staff",
+      ctx: unsafeAcknowledged,
+    });
+    expect(ackRes.ok).toBe(true);
+    if (ackRes.ok) {
+      expect(ackRes.effects).toContainEqual({ type: "SET_FOLLOW_UP_REQUIRED" });
+    }
 
     // with actual work performed it is not a visit-fee ending
     const withWork = {

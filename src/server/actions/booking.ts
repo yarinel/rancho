@@ -16,14 +16,14 @@ import {
 import { INTAKE_SCHEMA_VERSION } from "@/domain/intake";
 import { canTransitionRequest } from "@/domain/request-machine";
 import { logEvent } from "@/server/log";
-import { rateLimit } from "@/server/rate-limit";
+import { clientKeyFromHeaders, rateLimit } from "@/server/rate-limit";
 import { headers } from "next/headers";
 
 const token = () => randomBytes(16).toString("hex"); // 128-bit unguessable
 
 async function limited(bucket: string, limit = 30): Promise<boolean> {
   const h = await headers();
-  const ip = h.get("x-forwarded-for") ?? "local";
+  const ip = clientKeyFromHeaders(h);
   return rateLimit(`${bucket}:${ip}`, limit, 10 * 60 * 1000);
 }
 
@@ -135,8 +135,17 @@ export async function saveLocationAction(
   const d = await db();
   const draft = await loadDraft(d, parsed.data.requestToken);
   if (!draft) return { ok: false, error: "הבקשה לא נמצאה" };
+  if (draft.status !== "NEW") {
+    return { ok: false, error: "הבקשה כבר נשלחה — אי אפשר לעדכן כתובת" };
+  }
 
-  const geo = await resolveZone(d, parsed.data.address);
+  let geo;
+  try {
+    geo = await resolveZone(d, parsed.data.address);
+  } catch (e) {
+    console.error("resolveZone failed", e);
+    return { ok: false, error: "לא הצלחנו לזהות את הכתובת — נסו שוב" };
+  }
   await d
     .update(schema.serviceRequests)
     .set({
@@ -223,18 +232,27 @@ export async function submitContactAction(
   const d = await db();
   const draft = await loadDraft(d, data.requestToken);
   if (!draft) return { ok: false, error: "הבקשה לא נמצאה" };
+  if (draft.status !== "NEW") {
+    return { ok: false, error: "הבקשה כבר נשלחה — בדקו את קישור הסטטוס שלכם" };
+  }
   const answers = draft.intakeAnswers;
 
-  // reuse an existing household by phone (returning guest), else create
+  // reuse an existing household by phone (returning guest). A name mismatch
+  // gets its OWN household — a typo'd phone must never attach one family's
+  // address to another family's record.
   const existingCustomer = await d
     .select()
     .from(schema.customers)
     .where(eq(schema.customers.phone, data.phone));
+  const normalized = (n: string) => n.trim().replace(/\s+/g, " ");
+  const matched = existingCustomer.find(
+    (c) => normalized(c.name) === normalized(data.name),
+  );
   let householdId: string;
   let customerId: string;
-  if (existingCustomer.length > 0) {
-    householdId = existingCustomer[0].householdId;
-    customerId = existingCustomer[0].id;
+  if (matched) {
+    householdId = matched.householdId;
+    customerId = matched.id;
   } else {
     const [hh] = await d
       .insert(schema.households)
@@ -248,43 +266,87 @@ export async function submitContactAction(
     customerId = cust.id;
   }
 
+  // reuse household entities when they match — the bicycle owns its history
   let riderId: string | null = null;
   if (answers._rider_name) {
-    const [rider] = await d
-      .insert(schema.riders)
-      .values({ householdId, displayName: answers._rider_name })
-      .returning();
-    riderId = rider.id;
+    const existingRiders = await d
+      .select()
+      .from(schema.riders)
+      .where(eq(schema.riders.householdId, householdId));
+    const rmatch = existingRiders.find(
+      (r) => normalized(r.displayName) === normalized(answers._rider_name),
+    );
+    if (rmatch) {
+      riderId = rmatch.id;
+    } else {
+      const [rider] = await d
+        .insert(schema.riders)
+        .values({ householdId, displayName: answers._rider_name })
+        .returning();
+      riderId = rider.id;
+    }
   }
 
-  const [bike] = await d
-    .insert(schema.bicycles)
-    .values({
-      householdId,
-      riderId,
-      category: answers._bike_category ?? "other",
-      wheelSize: answers._wheel_size ?? "unknown",
-      hasGears:
-        answers._has_gears === "yes"
-          ? true
-          : answers._has_gears === "no"
-            ? false
-            : null,
-      brand: answers._brand || null,
-    })
-    .returning();
+  const householdBikes = await d
+    .select()
+    .from(schema.bicycles)
+    .where(eq(schema.bicycles.householdId, householdId));
+  const bikeMatch = householdBikes.find(
+    (b) =>
+      b.category === (answers._bike_category ?? "other") &&
+      b.wheelSize === (answers._wheel_size ?? "unknown") &&
+      (b.brand ?? "") === (answers._brand ?? ""),
+  );
+  const bike =
+    bikeMatch ??
+    (
+      await d
+        .insert(schema.bicycles)
+        .values({
+          householdId,
+          riderId,
+          category: answers._bike_category ?? "other",
+          wheelSize: answers._wheel_size ?? "unknown",
+          hasGears:
+            answers._has_gears === "yes"
+              ? true
+              : answers._has_gears === "no"
+                ? false
+                : null,
+          brand: answers._brand || null,
+        })
+        .returning()
+    )[0];
 
-  const [location] = await d
-    .insert(schema.locations)
-    .values({
-      householdId,
-      formattedAddress: answers._address ?? "",
-      zoneId: answers._zone_id || null,
-      lat: answers._lat || null,
-      lng: answers._lng || null,
-      accessNotes: answers._access_notes || null,
-    })
-    .returning();
+  const householdLocations = await d
+    .select()
+    .from(schema.locations)
+    .where(eq(schema.locations.householdId, householdId));
+  const locMatch = householdLocations.find(
+    (l) => normalized(l.formattedAddress) === normalized(answers._address ?? ""),
+  );
+  const location =
+    locMatch ??
+    (
+      await d
+        .insert(schema.locations)
+        .values({
+          householdId,
+          formattedAddress: answers._address ?? "",
+          zoneId: answers._zone_id || null,
+          lat: answers._lat || null,
+          lng: answers._lng || null,
+          accessNotes: answers._access_notes || null,
+        })
+        .returning()
+    )[0];
+
+  // never trust the client's photo claim — count what was actually uploaded
+  const uploaded = await d
+    .select()
+    .from(schema.media)
+    .where(eq(schema.media.requestId, draft.id));
+  const photosProvided = uploaded.length > 0;
 
   const catalog = await d.select().from(schema.serviceCatalogItems);
   const zone = answers._zone_id
@@ -300,7 +362,7 @@ export async function submitContactAction(
     symptom: draft.symptomCategory as never,
     answers,
     bike: { category: bike.category as never, wheelSize: bike.wheelSize as never },
-    photosProvided: data.photosProvided,
+    photosProvided,
     zoneTravelChargeKnown: zone ? zone.travelCharge != null : false,
     catalog: catalog.map((c) => ({
       id: c.id,

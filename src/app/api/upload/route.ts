@@ -7,11 +7,11 @@ import {
   MAX_UPLOAD_BYTES,
   storeMedia,
 } from "@/server/storage";
-import { rateLimit } from "@/server/rate-limit";
+import { clientKeyFromHeaders, rateLimit } from "@/server/rate-limit";
 
 /** Public intake photo upload — rate-limited, image-only, size-capped. */
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for") ?? "local";
+  const ip = clientKeyFromHeaders(req.headers);
   if (!rateLimit(`upload:${ip}`, 30, 10 * 60 * 1000)) {
     return NextResponse.json({ error: "יותר מדי העלאות, נסו שוב מעט מאוחר יותר" }, { status: 429 });
   }
@@ -29,14 +29,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "התמונה גדולה מדי (עד 8MB)" }, { status: 413 });
   }
 
+  // uploads must belong to a still-open draft — no anonymous orphan files
   const d = await db();
-  let requestId: string | null = null;
-  if (requestToken) {
-    const rows = await d.query.serviceRequests.findMany({
-      where: (t, { eq }) => eq(t.publicToken, requestToken),
-      limit: 1,
-    });
-    requestId = rows[0]?.id ?? null;
+  const rows = requestToken
+    ? await d.query.serviceRequests.findMany({
+        where: (t, { eq }) => eq(t.publicToken, requestToken),
+        limit: 1,
+      })
+    : [];
+  const request = rows[0];
+  if (!request || request.status !== "NEW") {
+    return NextResponse.json({ error: "בקשה לא תקפה להעלאה" }, { status: 403 });
+  }
+  const requestId = request.id;
+  const existing = await d.query.media.findMany({
+    where: (t, { eq }) => eq(t.requestId, requestId),
+  });
+  if (existing.length >= 10) {
+    return NextResponse.json({ error: "הגעתם למקסימום תמונות לבקשה" }, { status: 429 });
   }
 
   const key = randomUUID();

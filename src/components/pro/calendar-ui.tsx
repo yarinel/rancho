@@ -23,10 +23,16 @@ function useAction() {
   const run = async (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setBusy(true);
     setError(null);
-    const res = await fn();
-    setBusy(false);
-    if (!res.ok) setError(res.error ?? "שגיאה");
-    return res.ok;
+    try {
+      const res = await fn();
+      if (!res.ok) setError(res.error ?? "שגיאה");
+      return res.ok;
+    } catch {
+      setError("קלט לא תקין או בעיית תקשורת — בדקו תאריך ושעה");
+      return false;
+    } finally {
+      setBusy(false);
+    }
   };
   return { busy, error, run };
 }
@@ -90,7 +96,7 @@ export function CalendarToolbar({
           </div>
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="סיבה (אופציונלי)" className={inputCls} />
           <button
-            disabled={busy || !date}
+            disabled={busy || !date || !from || !to}
             onClick={async () => {
               const ok = await run(() =>
                 createBlockAction({
@@ -127,7 +133,7 @@ export function CalendarToolbar({
             לדרוס עבודה קיימת.
           </p>
           <button
-            disabled={busy || !name || !/^0\d{8,9}$/.test(phone) || !address || !date}
+            disabled={busy || !name || !/^0\d{8,9}$/.test(phone) || !address || !date || !time}
             onClick={async () => {
               const ok = await run(() =>
                 manualBookingAction({

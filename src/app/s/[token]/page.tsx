@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { db } from "@/server/db";
 import * as schema from "@/db/schema";
-import { rateLimit } from "@/server/rate-limit";
+import { clientKeyFromHeaders, rateLimit } from "@/server/rate-limit";
 import {
   jobStatusView,
   requestStatusView,
@@ -27,7 +27,7 @@ export default async function StatusPage({
 }) {
   const { token } = await params;
   const h = await headers();
-  const ip = h.get("x-forwarded-for") ?? "local";
+  const ip = clientKeyFromHeaders(h);
   if (!rateLimit(`status:${ip}`, 120, 10 * 60 * 1000)) notFound();
   if (!/^[a-f0-9]{24,64}$/.test(token)) notFound();
 

@@ -134,14 +134,20 @@ function undecidedFindings(ctx: JobContext): CtxFinding[] {
   );
 }
 
-/** UNSAFE results in a phase must be repaired or explicitly acknowledged. */
+/**
+ * UNSAFE results must be repaired or explicitly customer-acknowledged —
+ * DECLINED/DEFERRED are never sufficient for a safety-critical finding.
+ * Considers both UNSAFE check items in the phase AND UNSAFE findings from any
+ * source (manual findings included).
+ */
 function unsafeHandled(ctx: JobContext, phase: SafetyPhase) {
   const check = safetyCheck(ctx, phase);
-  if (!check) return { handled: true, followUp: false };
-  const unsafeItems = check.items.filter((i) => i.result === "UNSAFE");
-  if (unsafeItems.length === 0) return { handled: true, followUp: false };
+  const unsafeItems = check?.items.filter((i) => i.result === "UNSAFE") ?? [];
   const unsafeFindings = ctx.findings.filter((f) => f.severity === "UNSAFE");
-  if (unsafeFindings.length === 0) {
+  if (unsafeItems.length === 0 && unsafeFindings.length === 0) {
+    return { handled: true, followUp: false };
+  }
+  if (unsafeItems.length > 0 && unsafeFindings.length === 0) {
     return {
       handled: false,
       followUp: false,
@@ -212,12 +218,15 @@ function actualItemsApproved(ctx: JobContext): { ok: boolean; error?: string } {
   return { ok: true };
 }
 
-const isVisitFeePath = (ctx: JobContext) =>
+export const isVisitFeePath = (ctx: JobContext) =>
   ctx.findings.filter((f) => f.hasProposal).length > 0 &&
   ctx.findings
     .filter((f) => f.hasProposal)
     .every(
-      (f) => f.resolution === "DECLINED" || f.resolution === "DEFERRED",
+      (f) =>
+        f.resolution === "DECLINED" ||
+        f.resolution === "DEFERRED" ||
+        f.resolution === "ACKNOWLEDGED_UNREPAIRED",
     ) &&
   ctx.lineItems.filter((li) => li.kind === "ACTUAL").length === 0;
 
@@ -320,6 +329,8 @@ const TRANSITIONS: Record<string, { actors: string[]; guard?: Guard }> = {
       return { ok: true, effects };
     },
   },
+  // rework: the final check surfaced a problem — go back and fix it
+  "FINAL_SAFETY_CHECK→IN_SERVICE": { actors: ["staff"] },
   "PAYMENT_PENDING→COMPLETED": {
     actors: ["staff"],
     guard: ({ ctx }) => {
@@ -329,7 +340,8 @@ const TRANSITIONS: Record<string, { actors: string[]; guard?: Guard }> = {
       if (ctx.finalAmount == null && ctx.paymentState !== "WAIVED") {
         return { ok: false, error: "חסר סכום סופי" };
       }
-      if (ctx.finalAmount != null) {
+      // WAIVED is an explicit goodwill decision — amount validation not applicable
+      if (ctx.finalAmount != null && ctx.paymentState !== "WAIVED") {
         const v = validateFinalAmount(ctx, ctx.finalAmount, {
           visitFeeOnly: isVisitFeePath(ctx),
         });
@@ -348,6 +360,8 @@ const TRANSITIONS: Record<string, { actors: string[]; guard?: Guard }> = {
   "INSPECTION→UNRESOLVED": { actors: ["staff"], guard: unresolvedGuard },
   "AWAITING_APPROVAL→UNRESOLVED": { actors: ["staff"], guard: unresolvedGuard },
   "IN_SERVICE→UNRESOLVED": { actors: ["staff"], guard: unresolvedGuard },
+  "FINAL_SAFETY_CHECK→UNRESOLVED": { actors: ["staff"], guard: unresolvedGuard },
+  "PAYMENT_PENDING→UNRESOLVED": { actors: ["staff"], guard: unresolvedGuard },
 };
 
 function visitFeeGuard(input: JobTransitionInput) {
@@ -366,10 +380,14 @@ function visitFeeGuard(input: JobTransitionInput) {
         "מסלול דמי-ביקור חוקי רק כשכל ההצעות נדחו/נדחו-להמשך ואין עבודה בפועל",
     };
   }
-  return {
-    ok: true as const,
-    effects: [{ type: "APPLY_VISIT_FEE_ONLY" } as JobEffect],
-  };
+  // an UNSAFE finding cannot be quietly declined away: it must be repaired or
+  // explicitly customer-acknowledged (recorded), and acknowledgment flags a
+  // follow-up — same bar as the FINAL-check path (non-negotiable 4)
+  const u = unsafeHandled(ctx, "INSPECTION");
+  if (!u.handled) return { ok: false as const, error: u.error! };
+  const effects: JobEffect[] = [{ type: "APPLY_VISIT_FEE_ONLY" }];
+  if (u.followUp) effects.push({ type: "SET_FOLLOW_UP_REQUIRED" });
+  return { ok: true as const, effects };
 }
 
 function cancelGuard(input: JobTransitionInput) {

@@ -8,6 +8,8 @@ import * as schema from "@/db/schema";
 import { verifyPassword } from "@/server/password";
 import { createSessionToken, SESSION_COOKIE } from "@/server/session";
 import { logAudit } from "@/server/log";
+import { clientKeyFromHeaders, rateLimit } from "@/server/rate-limit";
+import { headers } from "next/headers";
 
 export interface LoginState {
   error?: string;
@@ -23,6 +25,16 @@ export async function loginAction(
   const password = String(formData.get("password") ?? "");
   if (!email || !password) {
     return { error: "נא למלא אימייל וסיסמה" };
+  }
+
+  // brute-force / scrypt-DoS protection: throttle by client AND by target account
+  const h = await headers();
+  const ip = clientKeyFromHeaders(h);
+  if (
+    !rateLimit(`login:ip:${ip}`, 10, 15 * 60 * 1000) ||
+    !rateLimit(`login:email:${email}`, 10, 15 * 60 * 1000)
+  ) {
+    return { error: "יותר מדי נסיונות — נסו שוב בעוד רבע שעה" };
   }
 
   const d = await db();

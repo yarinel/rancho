@@ -4,7 +4,7 @@ import { requireStaff } from "@/server/auth";
 import { db } from "@/server/db";
 import * as schema from "@/db/schema";
 import { Card } from "@/components/ui/card";
-import { fmtTime, shekel } from "@/lib/format";
+import { fmtTime, ilDayRange, shekel } from "@/lib/format";
 import { TodayActions } from "@/components/pro/today-actions";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +23,7 @@ export default async function ProTodayPage() {
   const d = await db();
 
   const now = new Date();
-  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const { start: dayStart, end: dayEnd } = ilDayRange(now);
 
   const appts = await d
     .select()

@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { db } from "@/server/db";
 import * as schema from "@/db/schema";
 import { logEvent } from "@/server/log";
-import { rateLimit } from "@/server/rate-limit";
+import { clientKeyFromHeaders, rateLimit } from "@/server/rate-limit";
 
 /**
  * Customer decision on proposed additional work, via the status-page link.
@@ -19,7 +19,7 @@ export async function decideApprovalAction(
   approverName: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const h = await headers();
-  const ip = h.get("x-forwarded-for") ?? "local";
+  const ip = clientKeyFromHeaders(h);
   if (!rateLimit(`approve:${ip}`, 20, 10 * 60 * 1000)) {
     return { ok: false, error: "יותר מדי נסיונות" };
   }

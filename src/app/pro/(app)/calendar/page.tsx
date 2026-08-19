@@ -3,7 +3,7 @@ import { requireStaff } from "@/server/auth";
 import { db } from "@/server/db";
 import * as schema from "@/db/schema";
 import { CalendarDay, CalendarToolbar } from "@/components/pro/calendar-ui";
-import { symptomHe } from "@/lib/format";
+import { ilDayRange, symptomHe } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +12,7 @@ export default async function CalendarPage() {
   const d = await db();
 
   const now = new Date();
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const { start, end } = ilDayRange(now, 7);
 
   const [appts, blocks, zones] = await Promise.all([
     d

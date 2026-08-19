@@ -9,6 +9,7 @@ import { requireStaff } from "@/server/auth";
 import { buildJobContext } from "@/server/job-context";
 import {
   canTransitionJob,
+  isVisitFeePath,
   validateFinalAmount,
   approvedTotal,
 } from "@/domain/job-machine";
@@ -71,17 +72,6 @@ export async function transitionJobAction(
       patch.expectedTotal = 0;
       patch.expectedTotalHigh = null;
     }
-    if (effect.type === "RELEASE_APPOINTMENT") {
-      await d
-        .update(schema.appointments)
-        .set({ status: "CANCELLED" })
-        .where(
-          and(
-            eq(schema.appointments.jobId, jobId),
-            eq(schema.appointments.status, "ACTIVE"),
-          ),
-        );
-    }
   }
 
   // completion closes the loop for the north-star metric
@@ -93,7 +83,38 @@ export async function transitionJobAction(
     if (declinedAll) patch.resolutionExclusion = "CUSTOMER_DECLINED";
   }
 
-  await d.update(schema.serviceJobs).set(patch).where(eq(schema.serviceJobs.id, jobId));
+  // atomic: conditional status write (loses the race cleanly) + effects together
+  const releasesAppointment = res.effects.some(
+    (e) => e.type === "RELEASE_APPOINTMENT",
+  );
+  const won = await d.transaction(async (tx) => {
+    const updated = await tx
+      .update(schema.serviceJobs)
+      .set(patch)
+      .where(
+        and(
+          eq(schema.serviceJobs.id, jobId),
+          eq(schema.serviceJobs.status, job.status),
+        ),
+      )
+      .returning();
+    if (updated.length === 0) return false; // concurrent transition won
+    if (releasesAppointment) {
+      await tx
+        .update(schema.appointments)
+        .set({ status: "CANCELLED" })
+        .where(
+          and(
+            eq(schema.appointments.jobId, jobId),
+            eq(schema.appointments.status, "ACTIVE"),
+          ),
+        );
+    }
+    return true;
+  });
+  if (!won) {
+    return { ok: false, error: "העבודה כבר עודכנה במקביל — רעננו ונסו שוב" };
+  }
   await logEvent(d, "service_job", jobId, `status:${to}`, `staff:${staff.id}`, extra);
   revalidatePath(`/pro/jobs/${jobId}`);
   revalidatePath("/pro");
@@ -388,9 +409,24 @@ export async function setActualItemsAction(
   const approvedIds = new Set(
     snapshot.ctx.approvals.filter((a) => a.decision === "APPROVED").map((a) => a.id),
   );
+  // booked work = labels the customer saw at booking (EXPECTED lines);
+  // anything else must carry an APPROVED record — no unapproved substitutions
+  const expected = await d
+    .select()
+    .from(schema.jobLineItems)
+    .where(
+      and(eq(schema.jobLineItems.jobId, jobId), eq(schema.jobLineItems.kind, "EXPECTED")),
+    );
+  const bookedLabels = new Set(expected.map((li) => li.label));
   for (const item of parsed) {
     if (item.approvalId && !approvedIds.has(item.approvalId)) {
       return { ok: false, error: `"${item.label}" מפנה לאישור שלא אושר` };
+    }
+    if (!item.approvalId && !bookedLabels.has(item.label)) {
+      return {
+        ok: false,
+        error: `"${item.label}" אינו חלק מהעבודה שסוכמה — נדרש אישור לקוח (הוסיפו ממצא)`,
+      };
     }
   }
 
@@ -434,15 +470,14 @@ export async function recordPaymentAction(
   const d = await db();
   const snapshot = await buildJobContext(d, jobId);
   if (!snapshot) return { ok: false, error: "עבודה לא נמצאה" };
-  const { ctx } = snapshot;
+  const { job, ctx } = snapshot;
+  // payment is recorded exactly once, at the payment stage — closed jobs are immutable
+  if (job.status !== "PAYMENT_PENDING") {
+    return { ok: false, error: "תשלום נרשם רק בשלב התשלום" };
+  }
 
   const amount = ILS(parsed.amountShekels);
-  const visitFeeOnly =
-    ctx.findings.filter((f) => f.hasProposal).length > 0 &&
-    ctx.findings
-      .filter((f) => f.hasProposal)
-      .every((f) => f.resolution === "DECLINED" || f.resolution === "DEFERRED") &&
-    ctx.lineItems.filter((li) => li.kind === "ACTUAL").length === 0;
+  const visitFeeOnly = isVisitFeePath(ctx); // single source of truth (domain)
 
   const check = validateFinalAmount(
     { ...ctx, amountAdjustReason: parsed.adjustReason ?? null },
@@ -457,7 +492,8 @@ export async function recordPaymentAction(
     .update(schema.serviceJobs)
     .set({
       paymentState: parsed.method,
-      finalAmount: parsed.method === "WAIVED" ? 0 : amount,
+      // WAIVED stores null — the COMPLETED guard's waiver carve-out keys on it
+      finalAmount: parsed.method === "WAIVED" ? null : amount,
       amountAdjustReason: parsed.adjustReason ?? null,
       paymentRecordedAt: new Date(),
       updatedAt: new Date(),
@@ -526,6 +562,57 @@ export async function attachJobMediaAction(
       .set({ afterMediaId: mediaId, updatedAt: new Date() })
       .where(eq(schema.serviceJobs.id, jobId));
   }
+  revalidatePath(`/pro/jobs/${jobId}`);
+  return { ok: true };
+}
+
+const settleSchema = z.object({
+  approvalId: z.string().uuid(),
+  decision: z.enum(["APPROVED", "DECLINED"]),
+  approverName: z.string().min(2).max(80),
+});
+
+/**
+ * Operator records a customer's VERBAL decision on a pending LINK approval
+ * (e.g. the parent answered by phone instead of tapping the link). Same
+ * immutability: only PENDING records can be settled, exactly once.
+ */
+export async function settleApprovalAction(
+  jobId: string,
+  input: z.infer<typeof settleSchema>,
+): Promise<ActionResult> {
+  const staff = await requireStaff();
+  const parsed = settleSchema.parse(input);
+  const d = await db();
+  const updated = await d
+    .update(schema.approvalRecords)
+    .set({
+      decision: parsed.decision,
+      approverName: parsed.approverName.trim(),
+      channel: "IN_PERSON",
+      decidedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.approvalRecords.id, parsed.approvalId),
+        eq(schema.approvalRecords.jobId, jobId),
+        eq(schema.approvalRecords.decision, "PENDING"),
+      ),
+    )
+    .returning();
+  if (updated.length === 0) {
+    return { ok: false, error: "האישור כבר הוכרע — אי אפשר לשנות" };
+  }
+  if (updated[0].findingId && parsed.decision === "DECLINED") {
+    await d
+      .update(schema.findings)
+      .set({ resolution: "DECLINED" })
+      .where(eq(schema.findings.id, updated[0].findingId));
+  }
+  await logEvent(d, "service_job", jobId, `approval:${parsed.decision}`, `staff:${staff.id}`, {
+    approvalId: parsed.approvalId,
+    verbal: true,
+  });
   revalidatePath(`/pro/jobs/${jobId}`);
   return { ok: true };
 }

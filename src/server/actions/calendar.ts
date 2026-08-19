@@ -88,39 +88,40 @@ export async function manualBookingAction(
   const techs = await d.select().from(schema.technicians);
   const phone = `+972${parsed.phone.slice(1)}`;
 
-  const existing = await d
-    .select()
-    .from(schema.customers)
-    .where(eq(schema.customers.phone, phone));
-  let householdId: string;
-  let customerId: string;
-  if (existing.length > 0) {
-    householdId = existing[0].householdId;
-    customerId = existing[0].id;
-  } else {
-    const [hh] = await d
-      .insert(schema.households)
-      .values({ label: parsed.customerName })
-      .returning();
-    const [cust] = await d
-      .insert(schema.customers)
-      .values({ householdId: hh.id, name: parsed.customerName, phone })
-      .returning();
-    householdId = hh.id;
-    customerId = cust.id;
-  }
-  const [bike] = await d
-    .insert(schema.bicycles)
-    .values({ householdId, category: "other" })
-    .returning();
-  const [loc] = await d
-    .insert(schema.locations)
-    .values({ householdId, formattedAddress: parsed.address })
-    .returning();
-
   try {
     const jobToken = randomBytes(16).toString("hex");
+    // everything inside one transaction — an overlap rejection leaves no orphans
     await d.transaction(async (tx) => {
+      const existing = await tx
+        .select()
+        .from(schema.customers)
+        .where(eq(schema.customers.phone, phone));
+      let householdId: string;
+      let customerId: string;
+      if (existing.length > 0) {
+        householdId = existing[0].householdId;
+        customerId = existing[0].id;
+      } else {
+        const [hh] = await tx
+          .insert(schema.households)
+          .values({ label: parsed.customerName })
+          .returning();
+        const [cust] = await tx
+          .insert(schema.customers)
+          .values({ householdId: hh.id, name: parsed.customerName, phone })
+          .returning();
+        householdId = hh.id;
+        customerId = cust.id;
+      }
+      const [bike] = await tx
+        .insert(schema.bicycles)
+        .values({ householdId, category: "other" })
+        .returning();
+      const [loc] = await tx
+        .insert(schema.locations)
+        .values({ householdId, formattedAddress: parsed.address })
+        .returning();
+
       const [job] = await tx
         .insert(schema.serviceJobs)
         .values({
@@ -204,10 +205,19 @@ export async function moveAppointmentAction(
 
   try {
     await d.transaction(async (tx) => {
-      await tx
+      const superseded = await tx
         .update(schema.appointments)
         .set({ status: "SUPERSEDED" })
-        .where(eq(schema.appointments.id, current.id));
+        .where(
+          and(
+            eq(schema.appointments.id, current.id),
+            eq(schema.appointments.status, "ACTIVE"),
+          ),
+        )
+        .returning();
+      if (superseded.length === 0) {
+        throw new Error("NO_ACTIVE_APPOINTMENT"); // double-move race — rollback
+      }
       await tx.insert(schema.appointments).values({
         jobId: parsed.jobId,
         technicianId: current.technicianId,
@@ -220,6 +230,9 @@ export async function moveAppointmentAction(
       });
     });
   } catch (e) {
+    if (/NO_ACTIVE_APPOINTMENT/.test(String(e))) {
+      return { ok: false, error: "התור כבר הוזז — רעננו את היומן" };
+    }
     if (isOverlap(e)) {
       return { ok: false, error: "מתנגש עם עבודה קיימת — בחר זמן אחר" };
     }

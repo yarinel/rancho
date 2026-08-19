@@ -150,12 +150,12 @@ test("Scenario B: ambiguous problem never invents a diagnosis — request → op
   });
   await fillContact(page, "אבי מזרחי", "0532222222");
 
-  // concierge copy, not a rejection; no invented price
+  // concierge copy, not a rejection; no invented price — and a tracking link
   await expect(page.getByText("אנחנו בודקים את זה בשבילכם")).toBeVisible();
-  requestBToken = await page.evaluate(() => {
-    const raw = localStorage.getItem("rancho_booking_draft_v1");
-    return raw ? (JSON.parse(raw).requestToken ?? "") : "";
-  });
+  const trackHref = await page
+    .getByRole("link", { name: "מעקב אחרי הבקשה" })
+    .getAttribute("href");
+  requestBToken = trackHref?.match(/\/s\/([a-f0-9]+)/)?.[1] ?? "";
   expect(requestBToken).not.toBe("");
 
   // operator reviews and prices it

@@ -1,4 +1,5 @@
 import type { Agorot } from "@/domain/types";
+import { dateKeyOf, zonedDate } from "@/domain/scheduling/engine";
 
 export function shekel(a: Agorot | null | undefined): string {
   if (a == null) return "—";
@@ -71,3 +72,10 @@ export const SYMPTOM_HE: Record<string, string> = {
 
 export const categoryHe = (c: string) => CATEGORY_HE[c] ?? c;
 export const symptomHe = (s: string) => SYMPTOM_HE[s] ?? s;
+
+/** Day range in Asia/Jerusalem — server TZ (UTC in production) must not shift the operator's day. */
+export function ilDayRange(now: Date, days = 1): { start: Date; end: Date } {
+  const key = dateKeyOf(now, TZ);
+  const start = zonedDate(key, 0, TZ);
+  return { start, end: new Date(start.getTime() + days * 24 * 60 * 60 * 1000) };
+}

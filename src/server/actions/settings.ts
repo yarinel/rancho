@@ -21,7 +21,14 @@ const serviceSchema = z.object({
   blockDurationMin: z.coerce.number().int().min(5).max(300),
   instantBookEligible: z.coerce.boolean(),
   active: z.coerce.boolean(),
-});
+}).refine(
+  (v) =>
+    v.priceType !== "RANGE" ||
+    v.priceHighShekels == null ||
+    v.basePriceShekels == null ||
+    v.priceHighShekels >= v.basePriceShekels,
+  { message: "בטווח מחירים, 'עד' חייב להיות גבוה מהמחיר הבסיסי" },
+);
 
 export async function updateServiceAction(formData: FormData): Promise<void> {
   const staff = await requireStaff();
@@ -59,10 +66,13 @@ export async function updateServiceAction(formData: FormData): Promise<void> {
   revalidatePath("/pro/settings/services");
 }
 
+const money = z
+  .string()
+  .refine((v) => v === "" || (Number.isFinite(Number(v)) && Number(v) >= 0), "מחיר לא תקין");
 const zoneSchema = z.object({
   id: z.string().uuid(),
-  travelChargeShekels: z.string(), // "" = TBD (null)
-  minOrderShekels: z.string(),
+  travelChargeShekels: money, // "" = TBD (null)
+  minOrderShekels: money,
   travelBufferMin: z.coerce.number().int().min(0).max(120),
   instantBookEnabled: z.coerce.boolean(),
   active: z.coerce.boolean(),
@@ -104,15 +114,19 @@ export async function updateZoneAction(formData: FormData): Promise<void> {
 
 const hoursSchema = z.object({
   technicianId: z.string().uuid(),
-  startLat: z.string().min(1),
-  startLng: z.string().min(1),
+  startLat: z.string().refine((v) => Number.isFinite(Number(v)) && Math.abs(Number(v)) <= 90, "קו רוחב לא תקין"),
+  startLng: z.string().refine((v) => Number.isFinite(Number(v)) && Math.abs(Number(v)) <= 180, "קו אורך לא תקין"),
   days: z.array(
-    z.object({
-      dayOfWeek: z.number().int().min(0).max(6),
-      enabled: z.boolean(),
-      startMinute: z.number().int().min(0).max(1439),
-      endMinute: z.number().int().min(1).max(1440),
-    }),
+    z
+      .object({
+        dayOfWeek: z.number().int().min(0).max(6),
+        enabled: z.boolean(),
+        startMinute: z.number().int().min(0).max(1439),
+        endMinute: z.number().int().min(1).max(1440),
+      })
+      .refine((d) => !d.enabled || d.endMinute > d.startMinute, {
+        message: "שעת סיום חייבת להיות אחרי שעת התחלה",
+      }),
   ),
 });
 
