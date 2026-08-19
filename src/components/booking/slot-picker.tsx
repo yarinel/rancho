@@ -124,7 +124,7 @@ function NoSlots({ requestToken }: { requestToken: string }) {
   const [sent, setSent] = useState(false);
   return (
     <Card className="flex flex-col gap-3 items-center text-center py-8">
-      <h1 className="text-xl font-bold">אין לנו חלון פנוי קרוב 😕</h1>
+      <h1 className="text-xl font-bold">אין לנו חלון פנוי קרוב</h1>
       <p className="text-ink-muted">
         לא מצאנו זמן שמתאים בימים הקרובים. השאירו לנו את זה — רן יבדוק את היומן
         ויחזור אליכם עם הצעה אישית.

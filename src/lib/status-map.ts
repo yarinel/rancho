@@ -51,7 +51,7 @@ export function jobStatusView(status: string): CustomerStatus {
     case "PAYMENT_PENDING":
       return { title: "סיימנו — סוגרים חשבון", tone: "progress" };
     case "COMPLETED":
-      return { title: "מוכן לרכיבה 🤘", tone: "done" };
+      return { title: "מוכן לרכיבה", tone: "done" };
     case "UNRESOLVED":
       return { title: "לא הסתדר הפעם", sub: "דברו איתנו ונסגור את זה", tone: "problem" };
     case "CANCELLED":

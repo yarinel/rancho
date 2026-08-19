@@ -62,7 +62,7 @@ export function TodayActions({
           }}
           className="min-h-11 px-4 rounded-(--radius-control) bg-brand text-on-brand text-sm font-medium disabled:opacity-50"
         >
-          יצאתי 🚗
+          יצאתי
         </button>
       )}
       <Link

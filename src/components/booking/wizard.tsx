@@ -176,7 +176,7 @@ export function BookingWizard() {
             onClick={() => update({ step: "out_of_scope" })}
             className="border-dashed"
           >
-            אופניים חשמליים ⚡
+            אופניים חשמליים
           </Chip>
           <p className="font-medium mt-2">מה גודל הגלגל?</p>
           <p className="text-sm text-ink-muted">מופיע על הצמיג עצמו, למשל 20×2.125</p>
@@ -622,7 +622,7 @@ function ResultStep({
   if (result.path === "SERVICE_REQUEST") {
     return (
       <div className="flex flex-col gap-4 text-center items-center py-6">
-        <p className="font-display text-5xl text-brand">קיבלנו! 🤙</p>
+        <p className="font-display text-5xl text-brand">קיבלנו!</p>
         <h1 className="text-2xl font-bold">אנחנו בודקים את זה בשבילכם</h1>
         <p className="text-ink-muted max-w-sm">
           רן עובר על הפרטים והתמונות וחוזר אליכם עם מחיר וזמן — בדרך כלל תוך כמה
@@ -694,7 +694,7 @@ function LeadCapture({
       <h1 className="text-2xl font-bold">{title}</h1>
       <p className="text-ink-muted max-w-sm">{body}</p>
       {sent ? (
-        <p className="font-bold text-brand">קיבלנו — נעדכן אתכם! 🤙</p>
+        <p className="font-bold text-brand">קיבלנו — נעדכן אתכם!</p>
       ) : (
         <div className="flex flex-col gap-2 w-full max-w-xs">
           <input

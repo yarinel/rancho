@@ -80,7 +80,7 @@ export function JobRunner(props: {
         </div>
         <p className="text-sm text-ink-muted">{location?.formattedAddress}</p>
         {location?.accessNotes && (
-          <p className="text-sm text-ink-muted">🔑 {location.accessNotes}</p>
+          <p className="text-sm text-ink-muted">{location.accessNotes}</p>
         )}
         <p className="text-sm">
           דווח: <strong>{symptomHe(job.reportedSymptoms)}</strong> · סוכם עד כה:{" "}
@@ -109,7 +109,7 @@ export function JobRunner(props: {
       {status === "SCHEDULED" && (
         <Stage title="לפני יציאה">
           <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "EN_ROUTE"))}>
-            יצאתי 🚗
+            יצאתי
           </BigButton>
         </Stage>
       )}
@@ -117,7 +117,7 @@ export function JobRunner(props: {
       {status === "EN_ROUTE" && (
         <Stage title="בדרך">
           <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "ARRIVED"))}>
-            הגעתי 📍
+            הגעתי
           </BigButton>
         </Stage>
       )}
@@ -126,7 +126,7 @@ export function JobRunner(props: {
         <Stage title="פתיחה">
           <OpeningToggles job={job} onSave={(v) => go(() => saveOpeningAction(job.id, v))} />
           <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "INSPECTION"))}>
-            מתחיל בדיקה 🔍
+            מתחיל בדיקה
           </BigButton>
         </Stage>
       )}
@@ -143,7 +143,7 @@ export function JobRunner(props: {
           <FindingsStage {...props} busy={busy} go={go} />
           <Stage title="המשך">
             <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "IN_SERVICE"))}>
-              הכל סגור — מתחיל לעבוד 🔧
+              הכל סגור — מתחיל לעבוד
             </BigButton>
             {findings.some((f) => f.proposedWorkHe && f.resolution === "OPEN") && (
               <BigButton
@@ -163,7 +163,7 @@ export function JobRunner(props: {
           <FindingsStage {...props} busy={busy} go={go} />
           <Stage title="המשך">
             <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "IN_SERVICE"))}>
-              אושר — ממשיך לעבודה 🔧
+              אושר — ממשיך לעבודה
             </BigButton>
             <BigButton
               variant="secondary"
@@ -182,7 +182,7 @@ export function JobRunner(props: {
           <FindingsStage {...props} busy={busy} go={go} compact />
           <Stage title="סיום עבודה">
             <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "FINAL_SAFETY_CHECK"))}>
-              לבדיקת סיום ✔️
+              לבדיקת סיום
             </BigButton>
           </Stage>
         </>
@@ -197,10 +197,10 @@ export function JobRunner(props: {
             busy={busy}
             onSave={(items) => go(() => saveSafetyCheckAction(job.id, { phase: "FINAL", items: items as never }))}
           />
-          <PhotoAttach jobId={job.id} kind="AFTER" label="תמונת אחרי 📷" onDone={() => go(async () => ({ ok: true }))} />
+          <PhotoAttach jobId={job.id} kind="AFTER" label="תמונת אחרי" onDone={() => go(async () => ({ ok: true }))} />
           <Stage title="המשך">
             <BigButton disabled={busy} onClick={() => go(() => transitionJobAction(job.id, "PAYMENT_PENDING"))}>
-              לתשלום 💳
+              לתשלום
             </BigButton>
           </Stage>
         </>
@@ -211,14 +211,14 @@ export function JobRunner(props: {
       )}
 
       {status === "COMPLETED" && (
-        <Stage title="הושלם 🤘">
+        <Stage title="הושלם">
           <p className="text-sm text-ink-muted">
             העבודה נסגרה. הסיכום זמין ללקוח בקישור הסטטוס.
           </p>
           <CopyStatusLink token={job.publicToken} phone={customer?.phone} />
           {!job.leftSiteAt && (
             <BigButton variant="secondary" disabled={busy} onClick={() => go(() => leftSiteAction(job.id))}>
-              עזבתי 🚗
+              עזבתי
             </BigButton>
           )}
         </Stage>
@@ -378,7 +378,7 @@ function SafetyCheckStage({
           onSave(CHECKS.map((c) => ({ checkType: c.type, result: results[c.type] })))
         }
       >
-        שמור בדיקה ✓
+        שמור בדיקה
       </BigButton>
     </Stage>
   );
@@ -416,7 +416,7 @@ function FindingsStage({
         <div key={f.id} className="border border-border rounded-(--radius-control) p-3 flex flex-col gap-2">
           <div className="flex justify-between items-start gap-2">
             <p className="font-medium">
-              {f.severity === "UNSAFE" && "⛔ "}
+              {f.severity === "UNSAFE" && ""}
               {f.titleHe}
             </p>
             <span className="text-xs text-ink-muted whitespace-nowrap">{resolutionHe(f.resolution)}</span>
@@ -446,7 +446,7 @@ function FindingsStage({
               onClick={() => go(() => resolveFindingAction(job.id, { findingId: f.id, resolution: "REPAIRED" }))}
               className="min-h-11 rounded-(--radius-control) border border-safety-ok text-safety-ok text-sm font-medium self-start px-4"
             >
-              תוקן ✓
+              תוקן
             </button>
           )}
           {f.severity === "UNSAFE" && f.resolution === "OPEN" && (
@@ -595,7 +595,7 @@ function ProposeWork({ finding, jobId, catalog, busy, go, approverName, setAppro
           }
           className="min-h-11 px-4 rounded-(--radius-control) bg-brand text-on-brand text-sm font-medium disabled:opacity-40"
         >
-          אושר במקום ✓
+          אושר במקום
         </button>
         <button
           disabled={busy || !work || !price || approverName.trim().length < 2}
@@ -672,10 +672,9 @@ function ActualWorkStage({ job, lineItems, approvals, busy, go }: any) {
           <span dir="ltr">{item.priceShekels} ₪</span>
           <button
             onClick={() => setItems(items.filter((_, j) => j !== i))}
-            aria-label={`הסר ${item.label}`}
-            className="min-h-9 min-w-9 text-ink-muted"
+            className="min-h-9 px-2 text-ink-muted underline text-xs"
           >
-            ✕
+            הסר
           </button>
         </div>
       ))}
@@ -684,7 +683,7 @@ function ActualWorkStage({ job, lineItems, approvals, busy, go }: any) {
         disabled={busy}
         onClick={() => go(() => setActualItemsAction(job.id, items as never))}
       >
-        שמור רשימת עבודה ✓
+        שמור רשימת עבודה
       </BigButton>
       <p className="text-xs text-ink-muted">
         עבודה מעבר למה שסוכם דורשת אישור לקוח — הוסיפו ממצא ובקשו אישור.
@@ -772,7 +771,7 @@ function PaymentStage({ job, approvedTotal, busy, go, findings }: any) {
           })
         }
       >
-        סגור עבודה 🤘
+        סגור עבודה
       </BigButton>
       <SkipAfterPhoto jobId={job.id} hasAfter={!!job.afterMediaId} busy={busy} go={go} />
     </Stage>
@@ -817,7 +816,7 @@ function PhotoAttach({
   return (
     <Card className="flex items-center gap-3">
       <label className="min-h-12 px-4 rounded-(--radius-control) border border-border flex items-center gap-2 cursor-pointer font-medium">
-        {uploading ? "מעלה…" : done ? "הועלתה ✓" : label}
+        {uploading ? "מעלה…" : done ? "הועלתה" : label}
         <input
           type="file"
           accept="image/*"
@@ -913,7 +912,7 @@ function CancelJob({ jobId, busy, go }: any) {
 function CopyStatusLink({ token, phone }: { token: string; phone?: string }) {
   const [copied, setCopied] = useState(false);
   const url = typeof window !== "undefined" ? `${window.location.origin}/s/${token}` : `/s/${token}`;
-  const message = encodeURIComponent(`סיימנו! כל הסיכום כאן: ${url}\nרנצ'ו — תיקוני אופניים עד הבית 🤘`);
+  const message = encodeURIComponent(`סיימנו! כל הסיכום כאן: ${url}\nרנצ'ו — תיקוני אופניים עד הבית`);
   return (
     <div className="flex flex-wrap gap-2">
       <button
@@ -923,7 +922,7 @@ function CopyStatusLink({ token, phone }: { token: string; phone?: string }) {
         }}
         className="min-h-11 px-4 rounded-(--radius-control) border border-border text-sm font-medium"
       >
-        {copied ? "הועתק ✓" : "העתק קישור סטטוס"}
+        {copied ? "הועתק" : "העתק קישור סטטוס"}
       </button>
       {phone && (
         <a

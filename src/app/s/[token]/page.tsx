@@ -229,7 +229,7 @@ function CompletionSummary({
         )}
         {safetyDone && (
           <p className="text-sm text-safety-ok">
-            ✓ עברו בדיקת בטיחות מלאה: קראנק, כידון, גלגלים, בלמים והילוכים
+            עברו בדיקת בטיחות מלאה: קראנק, כידון, גלגלים, בלמים והילוכים
           </p>
         )}
       </Card>
@@ -258,7 +258,7 @@ function CompletionSummary({
       )}
       {job.maintenanceTipHe && (
         <Card>
-          <p className="font-bold">טיפ תחזוקה מרן 🔧</p>
+          <p className="font-bold">טיפ תחזוקה מרן</p>
           <p className="text-sm">{job.maintenanceTipHe}</p>
         </Card>
       )}

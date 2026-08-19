@@ -1,15 +1,10 @@
 @import "tailwindcss";
 
 /*
- * Rancho RideCare — Design Tokens v1
- * Source: the Rancho price-list artifact (black / hot fuchsia / white, street energy)
- * per decision C1 (see docs/DECISIONS.md). Cream tint nods to the spec's "לבן קרמי"
- * for secondary/soft surfaces.
- *
- * Two surface moods share one token set:
- *  - Customer surfaces default to light ("paper") for maximum readability of
- *    forms, prices and scheduling. Brand "poster moments" use .surface-poster.
- *  - Rancho Pro uses .surface-pro (dark, high-contrast, sunlight-legible).
+ * Rancho RideCare — Design Tokens v2
+ * Owner directive (2026-08-19, D16): white background only, no emojis.
+ * Brand color accents (fuchsia on white) carry the identity; the logo asset
+ * provides the poster energy. One light surface system everywhere.
  */
 
 :root {
@@ -24,7 +19,6 @@
   --rancho-pink-strong: #e0176e;
   --rancho-pink-soft: #ffe3f0;
   --rancho-white: #ffffff;
-  --rancho-cream: #faf6f2;
   --rancho-gray: #6b6b6b;
   --rancho-gray-soft: #e8e4e1;
 
@@ -33,8 +27,8 @@
   --safety-attention: #d97a00;
   --safety-unsafe: #d32f2f;
 
-  /* Semantic surface tokens — light/customer default */
-  --color-bg: var(--rancho-cream);
+  /* Semantic surface tokens — white everywhere (D16) */
+  --color-bg: var(--rancho-white);
   --color-surface: var(--rancho-white);
   --color-ink: var(--rancho-ink);
   --color-ink-muted: var(--rancho-gray);
@@ -54,24 +48,14 @@
   --tap-min: 3rem; /* 48px minimum */
 }
 
-/* Dark, high-contrast operator surface (Rancho Pro) */
-.surface-pro {
-  --color-bg: var(--rancho-black);
-  --color-surface: #171717;
-  --color-ink: #f5f5f5;
-  --color-ink-muted: #b0b0b0;
-  --color-border: #333333;
-  --color-brand-soft: #3d1226;
-  --shadow-card: 0 2px 12px rgb(0 0 0 / 0.5);
-}
-
-/* Brand "poster moment" surface (heroes, confirmations, empty states) */
+/*
+ * .surface-pro / .surface-poster intentionally inherit the white system (D16).
+ * Kept as extension points should the owner ever want distinct moods again.
+ */
+.surface-pro,
 .surface-poster {
-  --color-bg: var(--rancho-black);
-  --color-surface: #171717;
-  --color-ink: var(--rancho-white);
-  --color-ink-muted: #cfcfcf;
-  --color-border: #333333;
+  --color-bg: var(--rancho-white);
+  --color-surface: var(--rancho-white);
 }
 
 @theme inline {

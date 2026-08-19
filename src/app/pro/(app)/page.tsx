@@ -85,7 +85,7 @@ export default async function ProTodayPage() {
     <div className="p-4 flex flex-col gap-3">
       <h1 className="text-xl font-bold">היום · {ordered.length} עבודות</h1>
       {ordered.length === 0 && (
-        <Card><p className="text-ink-muted">אין עבודות מתוכננות להיום. 🚲</p></Card>
+        <Card><p className="text-ink-muted">אין עבודות מתוכננות להיום.</p></Card>
       )}
       {ordered.map(({ job, appt }, i) => {
         const customer = customerBy.get(job.customerId);
