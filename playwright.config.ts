@@ -26,5 +26,10 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      // e2e-only secret; real deployments must set their own AUTH_SECRET
+      AUTH_SECRET: process.env.AUTH_SECRET ?? "e2e-not-for-production",
+      PGLITE_DIR: process.env.PGLITE_DIR ?? ".data/pglite-e2e",
+    },
   },
 });

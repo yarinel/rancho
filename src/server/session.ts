@@ -5,19 +5,20 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * AUTH_SECRET must be set in production; the dev fallback is clearly labeled.
  */
 
-const SECRET =
-  process.env.AUTH_SECRET ??
-  (process.env.NODE_ENV === "production"
-    ? (() => {
-        throw new Error("AUTH_SECRET is required in production");
-      })()
-    : "rancho-dev-secret-not-for-production");
+/** Resolved lazily so `next build` doesn't require the secret; first runtime use does. */
+function getSecret(): string {
+  if (process.env.AUTH_SECRET) return process.env.AUTH_SECRET;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET is required in production");
+  }
+  return "rancho-dev-secret-not-for-production";
+}
 
 export const SESSION_COOKIE = "rancho_staff";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
 
 function sign(payload: string): string {
-  return createHmac("sha256", SECRET).update(payload).digest("hex");
+  return createHmac("sha256", getSecret()).update(payload).digest("hex");
 }
 
 export function createSessionToken(
