@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   createDraftAction,
   createLeadAction,
+  getRebookContextAction,
   saveAnswersAction,
   saveLocationAction,
   submitContactAction,
@@ -94,6 +95,23 @@ export function BookingWizard() {
   useEffect(() => {
     if (loaded.current) return;
     loaded.current = true;
+    // returning customer via "קבעו תיקון נוסף" — prefill bike + location
+    const rebook = new URLSearchParams(window.location.search).get("rebook");
+    if (rebook) {
+      getRebookContextAction(rebook).then((ctx) => {
+        if (!ctx) return;
+        setState((s) => ({
+          ...s,
+          bikeCategory: ctx.bikeCategory as never,
+          wheelSize: ctx.wheelSize as never,
+          brand: ctx.brand ?? undefined,
+          riderName: ctx.riderName ?? undefined,
+          address: ctx.address ?? undefined,
+          accessNotes: ctx.accessNotes ?? undefined,
+        }));
+      });
+      return;
+    }
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time draft restore on mount

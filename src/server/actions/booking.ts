@@ -381,3 +381,45 @@ export async function submitContactAction(
     },
   };
 }
+
+/* ------------------------------ returning path ----------------------------- */
+
+export interface RebookContext {
+  bikeCategory: string;
+  wheelSize: string;
+  brand: string | null;
+  riderName: string | null;
+  address: string | null;
+  accessNotes: string | null;
+}
+
+/** Prefill for "קבעו תיקון נוסף" from a completed job's status token (Scenario E). */
+export async function getRebookContextAction(
+  jobToken: string,
+): Promise<RebookContext | null> {
+  if (!(await limited("rebook", 30))) return null;
+  if (!/^[a-f0-9]{24,64}$/.test(jobToken)) return null;
+  const d = await db();
+  const jobs = await d
+    .select()
+    .from(schema.serviceJobs)
+    .where(eq(schema.serviceJobs.publicToken, jobToken));
+  const job = jobs[0];
+  if (!job) return null;
+  const [bikes, locations] = await Promise.all([
+    d.select().from(schema.bicycles).where(eq(schema.bicycles.id, job.bicycleId)),
+    d.select().from(schema.locations).where(eq(schema.locations.id, job.locationId)),
+  ]);
+  const bike = bikes[0];
+  const riders = bike?.riderId
+    ? await d.select().from(schema.riders).where(eq(schema.riders.id, bike.riderId))
+    : [];
+  return {
+    bikeCategory: bike?.category ?? "other",
+    wheelSize: bike?.wheelSize ?? "unknown",
+    brand: bike?.brand ?? null,
+    riderName: riders[0]?.displayName ?? null,
+    address: locations[0]?.formattedAddress ?? null,
+    accessNotes: locations[0]?.accessNotes ?? null,
+  };
+}
