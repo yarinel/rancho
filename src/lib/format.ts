@@ -48,3 +48,26 @@ export function fmtDate(dt: Date): string {
 export function fmtDateTime(dt: Date): string {
   return `${fmtDate(dt)} · ${fmtTime(dt)}`;
 }
+
+export const CATEGORY_HE: Record<string, string> = {
+  kids: "אופני ילדים",
+  bmx: "BMX",
+  mtb: "אופני הרים",
+  cruiser: "קרוזר",
+  city: "אופני עיר",
+  road: "אופני כביש",
+  other: "אחר",
+};
+
+export const SYMPTOM_HE: Record<string, string> = {
+  puncture: "פנצ'ר",
+  brakes: "בלמים",
+  gears: "הילוכים",
+  chain_drops: "שרשרת נופלת",
+  loose_or_noise: "רופף או מרעיש",
+  tune_up: "טיפול",
+  unknown: "לא ידוע",
+};
+
+export const categoryHe = (c: string) => CATEGORY_HE[c] ?? c;
+export const symptomHe = (s: string) => SYMPTOM_HE[s] ?? s;

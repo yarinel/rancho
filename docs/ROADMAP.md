@@ -6,8 +6,7 @@ Execution contract for the P0 build. Source of truth: the approved Phase 0 plan 
 
 | Milestone | Status |
 |---|---|
-| M0 — Foundation | **Complete** (2026-08-18) |
-| M1–M12 | Not started |
+| M0–M12 | **Complete** (2026-08-19) — see PROGRESS.md |
 
 ## P0 milestones
 

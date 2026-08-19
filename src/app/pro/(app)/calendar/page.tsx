@@ -3,6 +3,7 @@ import { requireStaff } from "@/server/auth";
 import { db } from "@/server/db";
 import * as schema from "@/db/schema";
 import { CalendarDay, CalendarToolbar } from "@/components/pro/calendar-ui";
+import { symptomHe } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +93,7 @@ export default async function CalendarPage() {
           startISO: a.blockStart.toISOString(),
           endISO: a.blockEnd.toISOString(),
           title: cust?.name ?? "עבודה",
-          sub: job?.reportedSymptoms,
+          sub: job ? symptomHe(job.reportedSymptoms) : undefined,
           status: job?.status,
         };
       });

@@ -5,7 +5,7 @@ import { requireStaff } from "@/server/auth";
 import { db } from "@/server/db";
 import * as schema from "@/db/schema";
 import { Card } from "@/components/ui/card";
-import { fmtDate, shekel } from "@/lib/format";
+import { categoryHe, fmtDate, shekel } from "@/lib/format";
 import { jobStatusView } from "@/lib/status-map";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +61,7 @@ export default async function HouseholdPage({
         <Link key={b.id} href={`/pro/bikes/${b.id}`}>
           <Card className="hover:border-brand flex justify-between text-sm">
             <span className="font-medium">
-              {b.nickname ?? b.category}
+              {b.nickname ?? categoryHe(b.category)}
               {b.riderId && riderBy.get(b.riderId) && ` · ${riderBy.get(b.riderId)!.displayName}`}
             </span>
             <span className="text-ink-muted">{b.brand ?? ""}</span>
