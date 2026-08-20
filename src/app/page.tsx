@@ -15,15 +15,13 @@ export default function LandingPage() {
           className="w-52 sm:w-60 h-auto"
         />
         <h1 className="font-display text-6xl sm:text-7xl leading-none max-w-2xl">
-          פנצ&apos;ר? תיקון? טיפול?
-          <br />
-          שב בכייף, אנחנו בדרך
+          הגיע הזמן להוציא את האופניים מהמחסן
         </h1>
         <p className="text-ink-muted text-lg max-w-md">
           מתקנים אצלכם בבית, מסבירים לפני שמתקנים, ובודקים בטיחות בכל ביקור.
         </p>
         <Button as={Link} href="/book" className="text-xl px-10 min-h-14">
-          מה קרה לאופניים?
+          תתקנו לי את האופניים
         </Button>
       </section>
 

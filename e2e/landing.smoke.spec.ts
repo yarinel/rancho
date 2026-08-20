@@ -12,7 +12,7 @@ test.describe("landing (mobile, RTL)", () => {
 
     await expect(page).toHaveTitle(/רנצ'ו/);
 
-    const cta = page.getByRole("link", { name: "מה קרה לאופניים?" });
+    const cta = page.getByRole("link", { name: "תתקנו לי את האופניים" });
     await expect(cta).toBeVisible();
 
     // CTA leads into the booking flow
